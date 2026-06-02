@@ -1,0 +1,8 @@
+# Global — everything requires your review
+*   @saivenkatpractice
+
+# Workflow files need extra scrutiny
+.github/workflows/   @saivenkatpractice
+
+# Infrastructure changes need review
+terraform/           @saivenkatpractice
