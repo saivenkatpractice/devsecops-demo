@@ -1,0 +1,148 @@
+# ─────────────────────────────────────────────
+# CI Pipeline — runs on every PR and push to main
+# ─────────────────────────────────────────────
+name: CI
+
+# TRIGGERS: when does this workflow run?
+on:
+  pull_request:
+    branches: [main]        # any PR targeting main
+  push:
+    branches: [main]        # direct pushes to main (e.g. merge commits)
+
+# Prevent multiple runs piling up for the same PR
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ─────────────────────
+  # JOB 1: Lint
+  # ─────────────────────
+  lint:
+    name: Lint (flake8)
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out your code onto the runner
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Install Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"              # caches pip downloads → faster runs
+
+      # Step 3: Install only dev dependencies (flake8 lives here)
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      # Step 4: Run flake8 — fails the job if style rules are broken
+      - name: Run flake8
+        run: |
+          flake8 app/ tests/ \
+            --max-line-length=100 \
+            --exclude=__pycache__,.venv \
+            --format="%(path)s:%(row)d:%(col)d: %(code)s %(text)s"
+
+  # ─────────────────────
+  # JOB 2: Test
+  # ─────────────────────
+  test:
+    name: Test (pytest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      # Run tests with JUnit XML output so GitHub shows results inline
+      - name: Run pytest
+        run: |
+          pytest tests/ \
+            --verbose \
+            --tb=short \
+            --junitxml=reports/pytest-results.xml
+
+      # Upload the test report as an artifact (downloadable from Actions UI)
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()             # upload even if tests fail
+        with:
+          name: pytest-results
+          path: reports/pytest-results.xml
+
+  # ─────────────────────
+  # JOB 3: Coverage
+  # ─────────────────────
+  coverage:
+    name: Coverage (≥80%)
+    runs-on: ubuntu-latest
+    needs: test                  # only run if test job passed
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      # Run tests WITH coverage measurement
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:reports/coverage.xml \
+            --cov-fail-under=80         # ← fails job if coverage < 80%
+
+      # Upload coverage report as artifact
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: reports/coverage.xml
+
+  # ─────────────────────
+  # JOB 4: Summary
+  # ─────────────────────
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [lint, test, coverage]   # waits for ALL three jobs
+    if: always()
+
+    steps:
+      - name: Check all jobs passed
+        run: |
+          echo "Lint:     ${{ needs.lint.result }}"
+          echo "Test:     ${{ needs.test.result }}"
+          echo "Coverage: ${{ needs.coverage.result }}"
+
+          if [[ "${{ needs.lint.result }}"     != "success" || \
+                "${{ needs.test.result }}"     != "success" || \
+                "${{ needs.coverage.result }}" != "success" ]]; then
+            echo "❌ One or more CI jobs failed"
+            exit 1
+          fi
+
+          echo "✅ All CI checks passed — PR is safe to merge"

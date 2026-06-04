@@ -8,3 +8,5 @@ venv/
 .venv/
 dist/
 *.egg-info/
+reports/*.xml
+reports/*.html
