@@ -13,7 +13,3 @@ app.include_router(health_router)
 @app.get("/")
 def root():
     return {"message": "DevSecOps Demo API is running", "version": "1.0.0"}
-
-def badly_formatted(x,y,z):
-    a=1+2
-    return x+y+z+a
