@@ -1,15 +1,11 @@
 title = "DevSecOps Demo Gitleaks Config"
 
 [extend]
-# Use the default ruleset as base
 useDefault = true
 
-[[allowlist.regexes]]
-# Ignore test files — they may have fake credentials
-description = "Ignore test fixtures"
-regex = '''tests/.*'''
-
-[[allowlist.regexes]]
-# Ignore requirements files — package names can look like tokens
-description = "Ignore requirements files"
-regex = '''requirements.*\.txt'''
+[allowlist]
+description = "Global allowlist"
+regexes = [
+  '''tests/.*''',
+  '''requirements.*\.txt'''
+]
