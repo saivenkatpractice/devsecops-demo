@@ -5,14 +5,13 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-RUN pip install --upgrade pip && \
+RUN pip install --upgrade pip setuptools==82.0.1 wheel && \
     pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
 # ── Stage 2: Final image ──────────────────────────────────────────────────────
 FROM python:3.11-slim-bookworm
 
-# Apply all OS security patches — this is the key fix
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get clean && \
@@ -23,6 +22,10 @@ RUN addgroup --system appuser && adduser --system --ingroup appuser appuser
 WORKDIR /app
 
 COPY --from=builder /install /usr/local
+
+# Also upgrade setuptools in the final image so Trivy doesn't flag it here
+RUN pip install --upgrade pip setuptools==82.0.1 wheel --no-cache-dir
+
 COPY app/ ./app/
 
 RUN chown -R appuser:appuser /app
