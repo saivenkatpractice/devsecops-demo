@@ -1,5 +1,5 @@
 # ── Stage 1: Builder ──────────────────────────────────────────────────────────
-FROM python:3.11-slim-bookworm AS builder
+FROM python:3.11-slim-trixie AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ RUN pip install --upgrade pip setuptools==82.0.1 wheel && \
 
 
 # ── Stage 2: Final image ──────────────────────────────────────────────────────
-FROM python:3.11-slim-bookworm
+FROM python:3.11-slim-trixie
 
 RUN apt-get update && \
     apt-get upgrade -y && \
@@ -23,7 +23,6 @@ WORKDIR /app
 
 COPY --from=builder /install /usr/local
 
-# Also upgrade setuptools in the final image so Trivy doesn't flag it here
 RUN pip install --upgrade pip setuptools==82.0.1 wheel --no-cache-dir
 
 COPY app/ ./app/
