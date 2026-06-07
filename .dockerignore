@@ -1,0 +1,35 @@
+# Python cache — never ship these
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tests — not needed at runtime
+tests/
+reports/
+
+# Git and CI files — not needed in image
+.git/
+.github/
+.gitignore
+.gitleaks.toml
+.editorconfig
+
+# Dev dependencies
+requirements-dev.txt
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
