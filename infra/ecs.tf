@@ -39,7 +39,6 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
-# Task definition: the blueprint for running one copy of your container
 resource "aws_ecs_task_definition" "app" {
   family                   = var.project_name
   requires_compatibilities = ["FARGATE"]
@@ -49,16 +48,29 @@ resource "aws_ecs_task_definition" "app" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
+  volume {
+    name = "tmp"
+  }
+
   container_definitions = jsonencode([
     {
-      name      = var.project_name
-      image     = "${aws_ecr_repository.app.repository_url}:latest"
-      essential = true
+      name                   = var.project_name
+      image                  = "${aws_ecr_repository.app.repository_url}:latest"
+      essential              = true
+      readonlyRootFilesystem = true
 
       portMappings = [
         {
           containerPort = 8000
           protocol      = "tcp"
+        }
+      ]
+
+      mountPoints = [
+        {
+          sourceVolume  = "tmp"
+          containerPath = "/tmp"
+          readOnly      = false
         }
       ]
 

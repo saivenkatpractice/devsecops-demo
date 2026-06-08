@@ -117,3 +117,12 @@ resource "aws_route_table_association" "private" {
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
 }
+
+# Adopt the VPC's default security group and remove all its rules
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-default-sg-locked"
+  }
+}
