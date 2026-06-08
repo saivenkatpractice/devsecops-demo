@@ -1,0 +1,16 @@
+# Checkov suppressions for devsecops-demo infrastructure.
+# Each entry is an ACCEPTED RISK with a documented justification.
+# Revisit these whenever the architecture changes.
+skip-check:
+  - CKV_AWS_2     # HTTPS listener: no domain or TLS cert in this demo, HTTP only
+  - CKV_AWS_103   # TLS 1.2: depends on HTTPS, which is out of scope (no cert)
+  - CKV2_AWS_20   # HTTP->HTTPS redirect: depends on HTTPS, out of scope (no cert)
+  - CKV_AWS_378   # Backend HTTP: in-VPC traffic to the container is plain HTTP by design
+  - CKV_AWS_260   # ALB open on :80 from 0.0.0.0/0: it is a public web endpoint by design
+  - CKV2_AWS_28   # WAF: adds monthly cost, out of scope for a learning project
+  - CKV_AWS_91    # ALB access logs to S3: deferred to the observability stage (Stage 8)
+  - CKV_AWS_150   # LB deletion protection: off so we can terraform destroy between sessions
+  - CKV_AWS_338   # 1-year retention: 14 days is a deliberate cost choice for a demo
+  - CKV_AWS_158   # CloudWatch KMS CMK: AWS-managed encryption at rest is on, CMK out of scope
+  - CKV_AWS_136   # ECR KMS CMK: AES256 encryption at rest is on, CMK out of scope
+  - CKV_AWS_51    # ECR immutable tags: demo uses :latest, immutable digests come with CD in Stage 7

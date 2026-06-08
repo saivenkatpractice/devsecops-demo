@@ -1,0 +1,86 @@
+name: Terraform
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.2"
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+        working-directory: infra
+
+      - name: Initialize (no backend)
+        run: terraform init -backend=false
+        working-directory: infra
+
+      - name: Validate
+        run: terraform validate
+        working-directory: infra
+
+  security:
+    name: Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Run Checkov
+        run: |
+          checkov \
+            --directory infra \
+            --config-file infra/.checkov.yaml \
+            --compact \
+            --output cli \
+            --output sarif \
+            --output-file-path console,results.sarif
+
+      - name: Upload SARIF to Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: results.sarif
+          category: checkov
+
+  terraform-summary:
+    name: Terraform Summary
+    runs-on: ubuntu-latest
+    needs: [validate, security]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.validate.result }}" != "success" ] || [ "${{ needs.security.result }}" != "success" ]; then
+            echo "Terraform checks failed"
+            exit 1
+          fi
+          echo "All Terraform checks passed"
