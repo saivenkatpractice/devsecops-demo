@@ -13,4 +13,3 @@ skip-check:
   - CKV_AWS_338   # 1-year retention: 14 days is a deliberate cost choice for a demo
   - CKV_AWS_158   # CloudWatch KMS CMK: AWS-managed encryption at rest is on, CMK out of scope
   - CKV_AWS_136   # ECR KMS CMK: AES256 encryption at rest is on, CMK out of scope
-  - CKV_AWS_51    # ECR immutable tags: demo uses :latest, immutable digests come with CD in Stage 7

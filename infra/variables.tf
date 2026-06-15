@@ -15,3 +15,8 @@ variable "environment" {
   type        = string
   default     = "staging"
 }
+
+variable "image_tag" {
+  description = "Container image tag to deploy (the Git short SHA). Required: no default, so a deploy must always name an explicit, immutable image."
+  type        = string
+}

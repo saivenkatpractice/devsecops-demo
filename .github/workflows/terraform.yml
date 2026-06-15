@@ -32,7 +32,14 @@ jobs:
         working-directory: infra
 
       - name: Initialize (no backend)
-        run: terraform init -backend=false
+        run: |
+          for i in 1 2 3; do
+            if terraform init -backend=false; then exit 0; fi
+            echo "init attempt $i failed (likely a registry blip); retrying in 15s..."
+            sleep 15
+          done
+          echo "terraform init failed after 3 attempts"
+          exit 1
         working-directory: infra
 
       - name: Validate
