@@ -1,0 +1,129 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never cancel an in-flight deploy — let it finish, then run the next one.
+# (CI cancels redundant runs; CD must not leave a half-finished rollout.)
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+# OIDC: id-token lets each job mint a signed token to swap for short-lived
+# AWS credentials. No long-lived AWS keys anywhere.
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  AWS_ROLE_ARN: arn:aws:iam::491085399161:role/devsecops-demo-github-actions
+  TF_VERSION: "1.15.2"
+  PROJECT: devsecops-demo
+  # The image tag IS the commit SHA — same value in every job of this run, so
+  # staging and production deploy the exact same artifact. Terraform reads
+  # TF_VAR_image_tag automatically (no -var flag needed).
+  IMAGE_TAG: ${{ github.sha }}
+  TF_VAR_image_tag: ${{ github.sha }}
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # STAGING — build the immutable artifact, push to ECR, preview the deploy.
+  # Auto on every merge to main. Does NOT touch the live stack: it only creates
+  # the ECR repo (so we have somewhere to push) and runs `terraform plan`.
+  # ─────────────────────────────────────────────────────────────────────────
+  stage:
+    name: Build & Stage
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: infra
+
+      # Create ONLY the ECR repo first, so the build has a place to push.
+      # The repo stays Terraform-managed; this just solves the ordering.
+      - name: Ensure ECR repository exists
+        run: terraform apply -auto-approve -target=aws_ecr_repository.app
+        working-directory: infra
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: docker build -t "$REGISTRY/$PROJECT:$IMAGE_TAG" .
+
+      - name: Push image to ECR
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: docker push "$REGISTRY/$PROJECT:$IMAGE_TAG"
+
+      # Preview the full deploy without changing the live stack.
+      - name: Terraform plan (preview production deploy)
+        run: terraform plan
+        working-directory: infra
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # PRODUCTION — the real deploy to the single shared stack. Gated by the
+  # `production` GitHub Environment's required reviewers (configured in Step 4),
+  # so it pauses for a human before applying the image staged above.
+  # ─────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: stage
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: infra
+
+      # Deploy the EXACT image built and previewed in the staging job.
+      - name: Terraform apply
+        run: terraform apply -auto-approve
+        working-directory: infra
+
+      - name: Wait for ECS service to stabilize
+        working-directory: infra
+        run: |
+          CLUSTER=$(terraform output -raw ecs_cluster_name)
+          SERVICE=$(terraform output -raw ecs_service_name)
+          echo "Waiting for $SERVICE on $CLUSTER to reach steady state..."
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+
+      - name: Print app URL
+        working-directory: infra
+        run: echo "Deployed. App URL -> http://$(terraform output -raw alb_dns_name)"
